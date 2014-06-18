@@ -22,7 +22,7 @@ func TestBuildValuesList(t *testing.T) {
 	pkValues := []interface{}{pk1Val}
 	// want [[1]]
 	want := [][]sqltypes.Value{[]sqltypes.Value{pk1Val}}
-	got := buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ := buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 1 failed, want %v, got %v", want, got)
 	}
@@ -32,7 +32,7 @@ func TestBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{":pk1"}
 	// want [[1]]
 	want = [][]sqltypes.Value{[]sqltypes.Value{pk1Val}}
-	got = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 2 failed, want %v, got %v", want, got)
 	}
@@ -42,7 +42,7 @@ func TestBuildValuesList(t *testing.T) {
 	pkValues = []interface{}{pk1Val, pk2Val}
 	// want [[1 abc]]
 	want = [][]sqltypes.Value{[]sqltypes.Value{pk1Val, pk2Val}}
-	got = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 3 failed, want %v, got %v", want, got)
 	}
@@ -58,7 +58,7 @@ func TestBuildValuesList(t *testing.T) {
 	want = [][]sqltypes.Value{
 		[]sqltypes.Value{pk1Val, pk2Val},
 		[]sqltypes.Value{pk1Val2, pk2Val2}}
-	got = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 4 failed, want %v, got %v", want, got)
 	}
@@ -73,7 +73,7 @@ func TestBuildValuesList(t *testing.T) {
 		[]sqltypes.Value{pk1Val, pk2Val},
 		[]sqltypes.Value{pk1Val, pk2Val2}}
 
-	got = buildValueList(&tableInfo, pkValues, bindVars)
+	got, _ = buildValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 5 failed, want %v, got %v", want, got)
 	}
@@ -98,7 +98,7 @@ func TestBuildINValueList(t *testing.T) {
 		[]sqltypes.Value{pk1Val},
 		[]sqltypes.Value{pk1Val2},
 		[]sqltypes.Value{pk1Val3}}
-	got := buildINValueList(&tableInfo, pkValues, bindVars)
+	got, _ := buildINValueList(&tableInfo, pkValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 1 failed, want %v, got %v", want, got)
 	}
@@ -117,13 +117,13 @@ func TestBuildSecondaryList(t *testing.T) {
 	pk1Val, _ := sqltypes.BuildValue(1)
 	pk2Val, _ := sqltypes.BuildValue("abc")
 	pkValues := []interface{}{pk1Val, pk2Val}
-	pkList := buildValueList(&tableInfo, pkValues, bindVars)
+	pkList, _ := buildValueList(&tableInfo, pkValues, bindVars)
 	pk2SecVal, _ := sqltypes.BuildValue("xyz")
 	secondaryPKValues := []interface{}{nil, pk2SecVal}
 	// want [[1 xyz]]
 	want := [][]sqltypes.Value{
 		[]sqltypes.Value{pk1Val, pk2SecVal}}
-	got := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
+	got, _ := buildSecondaryList(&tableInfo, pkList, secondaryPKValues, bindVars)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("case 1 failed, want %v, got %v", want, got)
 	}

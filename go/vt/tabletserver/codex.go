@@ -18,116 +18,138 @@ import (
 // buildValueList builds the set of PK reference rows used to drive the next query.
 // It uses the PK values supplied in the original query and bind variables.
 // The generated reference rows are validated for type match against the PK of the table.
-func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
+func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) (valueList [][]sqltypes.Value, err *TabletError) {
 	length := -1
 	for _, pkValue := range pkValues {
 		if list, ok := pkValue.([]interface{}); ok {
 			if length == -1 {
 				if length = len(list); length == 0 {
-					panic(NewTabletError(FAIL, "empty list for values %v", pkValues))
+					err = NewTabletError(FAIL, "empty list for values %v", pkValues)
+					return
 				}
 			} else if length != len(list) {
-				panic(NewTabletError(FAIL, "mismatched lengths for values %v", pkValues))
+				err = NewTabletError(FAIL, "mismatched lengths for values %v", pkValues)
+				return
 			}
 		}
 	}
 	if length == -1 {
 		length = 1
 	}
-	valueList := make([][]sqltypes.Value, length)
+	valueList = make([][]sqltypes.Value, length)
 	for i := 0; i < length; i++ {
 		valueList[i] = make([]sqltypes.Value, len(pkValues))
 		for j, pkValue := range pkValues {
+			var value interface{}
 			if list, ok := pkValue.([]interface{}); ok {
-				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), list[i], bindVars)
+				value = list[i]
 			} else {
-				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), pkValue, bindVars)
+				value = pkValue
+			}
+			if valueList[i][j], err = resolveValue(tableInfo.GetPKColumn(j), value, bindVars); err != nil {
+				return
 			}
 		}
 	}
-	return valueList
+	return
 }
 
 // buildINValueList builds the set of PK reference rows used to drive the next query
 // using an IN clause. This works only for tables with no composite PK columns.
 // The generated reference rows are validated for type match against the PK of the table.
-func buildINValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
+func buildINValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) (valueList [][]sqltypes.Value, err *TabletError) {
 	if len(tableInfo.PKColumns) != 1 {
-		panic("unexpected")
+		err = NewTabletError(FAIL, "IN clause not allwed in composite PK table: %v", tableInfo.Name)
+		return
 	}
-	valueList := make([][]sqltypes.Value, len(pkValues))
+
+	valueList = make([][]sqltypes.Value, len(pkValues))
 	for i, pkValue := range pkValues {
 		valueList[i] = make([]sqltypes.Value, 1)
-		valueList[i][0] = resolveValue(tableInfo.GetPKColumn(0), pkValue, bindVars)
+		if valueList[i][0], err = resolveValue(tableInfo.GetPKColumn(0), pkValue, bindVars); err != nil {
+			return
+		}
 	}
-	return valueList
+	return
 }
 
 // buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
-func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
+func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) (valueList [][]sqltypes.Value, err *TabletError) {
 	if secondaryList == nil {
-		return nil
+		return
 	}
-	valueList := make([][]sqltypes.Value, len(pkList))
+	valueList = make([][]sqltypes.Value, len(pkList))
 	for i, row := range pkList {
 		valueList[i] = make([]sqltypes.Value, len(row))
 		for j, cell := range row {
 			if secondaryList[j] == nil {
 				valueList[i][j] = cell
 			} else {
-				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), secondaryList[j], bindVars)
+				if valueList[i][j], err = resolveValue(tableInfo.GetPKColumn(j), secondaryList[j], bindVars); err != nil {
+					return
+				}
 			}
 		}
 	}
-	return valueList
+	return
 }
 
-func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value) {
+func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value, err *TabletError) {
 	switch v := value.(type) {
 	case string:
 		lookup, ok := bindVars[v[1:]]
 		if !ok {
-			panic(NewTabletError(FAIL, "Missing bind var %s", v))
+			err = NewTabletError(FAIL, "Missing bind var %s", v)
+			return
 		}
-		sqlval, err := sqltypes.BuildValue(lookup)
-		if err != nil {
-			panic(NewTabletError(FAIL, "%v", err))
+		if sqlval, e := sqltypes.BuildValue(lookup); e != nil {
+			err = NewTabletError(FAIL, e.Error())
+			return
+		} else {
+			result = sqlval
 		}
-		result = sqlval
 	case sqltypes.Value:
 		result = v
 	case nil:
 		// no op
 	default:
-		panic("unreachable")
+		err = NewTabletError(FAIL, "incompatible value type %v", v)
+		return
 	}
+
 	validateValue(col, result)
-	return result
+	return
 }
 
-func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) {
+func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) (err *TabletError) {
 	if len(row) != len(columnNumbers) {
-		panic(NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers)))
+		err = NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers))
+		return
 	}
 	for j, value := range row {
-		validateValue(&tableInfo.Columns[columnNumbers[j]], value)
+		if err = validateValue(&tableInfo.Columns[columnNumbers[j]], value); err != nil {
+			return
+		}
 	}
+
+	return
 }
 
-func validateValue(col *schema.TableColumn, value sqltypes.Value) {
+func validateValue(col *schema.TableColumn, value sqltypes.Value) *TabletError {
 	if value.IsNull() {
-		return
+		return nil
 	}
 	switch col.Category {
 	case schema.CAT_NUMBER:
 		if !value.IsNumeric() {
-			panic(NewTabletError(FAIL, "type mismatch, expecting numeric type for %v", value))
+			return NewTabletError(FAIL, "type mismatch, expecting numeric type for %v", value)
 		}
 	case schema.CAT_VARBINARY:
 		if !value.IsString() {
-			panic(NewTabletError(FAIL, "type mismatch, expecting string type for %v", value))
+			return NewTabletError(FAIL, "type mismatch, expecting string type for %v", value)
 		}
 	}
+	return nil
 }
 
 func buildKey(row []sqltypes.Value) (key string) {
