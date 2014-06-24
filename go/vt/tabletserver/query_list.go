@@ -5,7 +5,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
+)
+
+const (
+	Running = iota
+	Terminating
 )
 
 // QueryDetail is a simple wrapper for Query, Context and PoolConnection
@@ -14,11 +20,16 @@ type QueryDetail struct {
 	context *Context
 	connID  int64
 	start   time.Time
+	state   sync2.AtomicInt64
 }
 
 // NewQueryDetail creates a new QueryDetail
 func NewQueryDetail(query *proto.Query, context *Context, connID int64) *QueryDetail {
 	return &QueryDetail{query: query, context: context, connID: connID, start: time.Now()}
+}
+
+func (qd *QueryDetail) Terminate() bool {
+	return qd.state.CompareAndSwap(Running, Terminating)
 }
 
 // QueryList holds a thread safe list of QueryDetails
@@ -46,6 +57,10 @@ func (ql *QueryList) Remove(qd *QueryDetail) {
 	delete(ql.queryDetails, qd.connID)
 }
 
+func (ql *QueryList) Get(connID int64) *QueryDetail {
+	return ql.queryDetails[connID]
+}
+
 // QueryDetailzRow is used for rendering QueryDetail in a template
 type QueryDetailzRow struct {
 	Query         string
@@ -56,6 +71,7 @@ type QueryDetailzRow struct {
 	SessionID     int64
 	TransactionID int64
 	ConnID        int64
+	State         int64
 }
 
 type byStartTime []QueryDetailzRow
@@ -78,6 +94,7 @@ func (ql *QueryList) GetQueryzRows() []QueryDetailzRow {
 			SessionID:     qd.query.SessionId,
 			TransactionID: qd.query.TransactionId,
 			ConnID:        qd.connID,
+			State:         qd.state.Get(),
 		}
 		rows = append(rows, row)
 	}

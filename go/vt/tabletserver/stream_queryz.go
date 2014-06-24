@@ -1,7 +1,9 @@
 package tabletserver
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 	"text/template"
 
 	"github.com/youtube/vitess/go/acl"
@@ -18,6 +20,7 @@ var (
 			<th>SessionID</th>
 			<th>TransactionID</th>
 			<th>ConnectionID</th>
+			<th>Current State</th>
 		</tr>
         </thead>
 	`)
@@ -31,12 +34,14 @@ var (
 			<td>{{.SessionID}}</td>
 			<td>{{.TransactionID}}</td>
 			<td>{{.ConnID}}</td>
+			<td>{{.State}}</td>
 		</tr>
 	`))
 )
 
 func init() {
 	http.HandleFunc("/streamqueryz", streamqueryzHandler)
+	http.HandleFunc("/streamqueryz/terminate", streamqueryzTerminateHandler)
 }
 
 func streamqueryzHandler(w http.ResponseWriter, r *http.Request) {
@@ -51,4 +56,25 @@ func streamqueryzHandler(w http.ResponseWriter, r *http.Request) {
 	for i := range rows {
 		streamqueryzTmpl.Execute(w, rows[i])
 	}
+}
+
+func streamqueryzTerminateHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, fmt.Sprintf("cannot parse form: %s", err), http.StatusInternalServerError)
+		return
+	}
+	connID := r.FormValue("connID")
+	c, err := strconv.Atoi(connID)
+	if err != nil {
+		http.Error(w, "invalid connID", http.StatusInternalServerError)
+		return
+	}
+	if qd := SqlQueryRpcService.qe.streamQList.Get(int64(c)); qd != nil {
+		qd.Terminate()
+	}
+	streamqueryzHandler(w, r)
 }

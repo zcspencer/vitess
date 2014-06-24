@@ -376,8 +376,17 @@ func (qe *QueryEngine) StreamExecute(logStats *SQLQueryStats, query *proto.Query
 	qd := NewQueryDetail(query, logStats.context, conn.Id())
 	qe.streamQList.Add(qd)
 	defer qe.streamQList.Remove(qd)
+
+	// Wrap callback function to return an error on terminate to stop fetching
+	sendReplyWithTerminateInterrupt := func(reply *mproto.QueryResult) error {
+		if qd.state.Get() != Running {
+			return NewTabletError(FAIL, "query terminated")
+		}
+		return sendReply(reply)
+	}
+
 	// then let's stream!
-	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReply)
+	qe.fullStreamFetch(logStats, conn, plan.FullQuery, query.BindVariables, nil, nil, sendReplyWithTerminateInterrupt)
 }
 
 // InvalidateForDml performs rowcache invalidations for the dml.
