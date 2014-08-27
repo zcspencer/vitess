@@ -15,6 +15,7 @@ from vtdb import field_types
 from vtdb import keyrange
 from vtdb import vtdb_logger
 from vtdb import vtgate_cursor
+from vtdb import vtgate_utils
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -74,7 +75,7 @@ def _create_req_with_keyranges(sql, new_binds, keyspace, tablet_type, keyranges)
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
 class VTGateConnection(object):
-  session = None
+  _session = None
   _stream_fields = None
   _stream_conversions = None
   _stream_result = None
@@ -88,6 +89,10 @@ class VTGateConnection(object):
   def __str__(self):
     return '<VTGateConnection %s >' % self.addr
 
+  @property
+  def session(self):
+    return self._session
+
   def dial(self):
     try:
       if not self.is_closed():
@@ -97,7 +102,7 @@ class VTGateConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
-    if self.session:
+    if self._session:
       self.rollback()
     self.client.close()
 
@@ -112,34 +117,37 @@ class VTGateConnection(object):
   def begin(self):
     try:
       response = self.client.call('VTGate.Begin', None)
-      self.session = response.reply
+      self._session = response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
     try:
-      session = self.session
-      self.session = None
+      session = self._session
       self.client.call('VTGate.Commit', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
+    finally:
+      self._session = None
 
   def rollback(self):
     try:
-      session = self.session
-      self.session = None
+      session = self._session
       self.client.call('VTGate.Rollback', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
+    finally:
+      self._session = None
 
   def _add_session(self, req):
-    if self.session:
-      req['Session'] = self.session
+    if self._session:
+      req['Session'] = self._session
 
   def _update_session(self, response):
     if 'Session' in response.reply and response.reply['Session']:
-      self.session = response.reply['Session']
+      self._session = response.reply['Session']
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
     exec_method = None
     req = None
@@ -184,6 +192,7 @@ class VTGateConnection(object):
       raise
     return results, rowcount, lastrowid, fields
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _execute_entity_ids(self, sql, bind_variables, keyspace, tablet_type, entity_keyspace_id_map, entity_column_name):
     sql, new_binds = dbapi.prepare_query_bind_vars(sql, bind_variables)
     new_binds = field_types.convert_bind_vars(new_binds)
@@ -229,6 +238,7 @@ class VTGateConnection(object):
     return results, rowcount, lastrowid, fields
 
 
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _execute_batch(self, sql_list, bind_variables_list, keyspace, tablet_type, keyspace_ids):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
@@ -278,6 +288,7 @@ class VTGateConnection(object):
   # we return the fields for the response, and the column conversions
   # the conversions will need to be passed back to _stream_next
   # (that way we avoid using a member variable here for such a corner case)
+  @vtgate_utils.exponential_backoff_retry((dbexceptions.RequestBacklog))
   def _stream_execute(self, sql, bind_variables, keyspace, tablet_type, keyspace_ids=None, keyranges=None):
     exec_method = None
     req = None
@@ -325,7 +336,7 @@ class VTGateConnection(object):
           return None
         # A session message, if any comes separately with no rows
         if 'Session' in self._stream_result.reply and self._stream_result.reply['Session']:
-          self.session = self._stream_result.reply['Session']
+          self._session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
         # An extra fields message if it is scatter over streaming, ignore it
