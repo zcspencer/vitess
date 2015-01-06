@@ -182,13 +182,9 @@ func rebuildCellSrvShard(ctx context.Context, log logutil.Logger, ts topo.Server
 		wg.Add(1)
 		go func(tabletType topo.TabletType, addrs *topo.EndPoints) {
 			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType)
-			span := trace.NewSpanFromContext(ctx)
-			span.StartClient("TopoServer.UpdateEndPoints")
-			span.Annotate("tablet_type", string(tabletType))
-			if err := ts.UpdateEndPoints(cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs); err != nil {
+			if err := topo.UpdateEndPoints(ctx, ts, cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, addrs); err != nil {
 				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", cell, shardInfo.Keyspace(), shardInfo.ShardName(), tabletType, err))
 			}
-			span.Finish()
 			wg.Done()
 		}(tabletType, addrs)
 	}
