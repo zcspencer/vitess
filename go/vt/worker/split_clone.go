@@ -547,6 +547,11 @@ func (scw *SplitCloneWorker) copy() error {
 
 					// build the query, and start the streaming
 					selectSQL := buildSQLFromChunks(scw.wr, td, chunks, chunkIndex, scw.sourceAliases[shardIndex].String())
+					sourceShard := scw.sourceShards[shardIndex]
+					fmt.Printf("NewQueryResultReaderForTablet for source shard: %v/%v\n", sourceShard.Keyspace(), sourceShard.ShardName())
+					fmt.Printf("NewQueryResultReaderForTablet for source tablet: %v\n", scw.sourceTablets[shardIndex])
+					fmt.Printf("NewQueryResultReaderForTablet for source alias: %v\n", scw.sourceAliases[shardIndex])
+
 					qrr, err := NewQueryResultReaderForTablet(scw.ctx, scw.wr.TopoServer(), scw.sourceAliases[shardIndex], selectSQL)
 					if err != nil {
 						processError("NewQueryResultReaderForTablet failed: %v", err)

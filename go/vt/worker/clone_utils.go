@@ -103,23 +103,28 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
 func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
+	fmt.Printf("Starting ExecuteFetch on %v!\n", ti)
 	retryDuration := 2 * time.Hour
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
 	for {
-		tryCtx, cancel := context.WithTimeout(retryCtx, 2*time.Minute)
-		_, err := wr.TabletManagerClient().ExecuteFetchAsApp(tryCtx, ti, command, 0, false, disableBinLogs)
+		tryCtx, cancel := context.WithTimeout(retryCtx, 30*time.Second)
+		_, err := wr.TabletManagerClient().ExecuteFetch(tryCtx, ti, command, 0, false, disableBinLogs)
 		cancel()
 		switch {
 		case err == nil:
+			fmt.Printf("Successfully ran ExecuteFetch on %v!\n", ti)
 			// success!
 			return nil
 		case wr.TabletManagerClient().IsTimeoutError(err):
+			fmt.Printf("ExecuteFetch failed on %v; will retry because it was a timeout error: %v\n", ti, err)
 			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a timeout error: %v", ti, err)
 		case strings.Contains(err.Error(), "retry: "):
+			fmt.Printf("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v\n", ti, err)
 			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v", ti, err)
 		default:
+			fmt.Printf("executeFetchWithRetries failed with err: %v\n", err)
 			return err
 		}
 		t := time.NewTimer(30 * time.Second)
@@ -346,6 +351,9 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
 func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, disableBinLogs bool) error {
+	fmt.Printf("About to sleep for 30s...\n")
+	time.Sleep(30 * time.Second)
+	fmt.Printf("finished sleeping!\n")
 	for {
 		select {
 		case cmd, ok := <-insertChannel:

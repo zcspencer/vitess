@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import signal
 import shutil
 import sys
 import time
@@ -582,6 +583,12 @@ class Tablet(object):
 
   def get_healthz(self):
     return urllib2.urlopen('http://localhost:%u/healthz' % self.port).read()
+
+  def suspend(self):
+    return self.proc.send_signal(signal.SIGSTOP)
+
+  def resume(self):
+    return self.proc.send_signal(signal.SIGCONT)
 
   def kill_vttablet(self):
     logging.debug('killing vttablet: %s', self.tablet_alias)
