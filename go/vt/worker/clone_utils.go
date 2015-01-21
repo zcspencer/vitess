@@ -103,13 +103,15 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
 func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, command string, disableBinLogs bool) error {
+	fmt.Printf("Sleeping before ExecuteFetch on %v...\n", ti)
+	time.Sleep(30 * time.Second)
 	fmt.Printf("Starting ExecuteFetch on %v!\n", ti)
 	retryDuration := 2 * time.Hour
 	// We should keep retrying up until the retryCtx runs out
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
 	for {
-		tryCtx, cancel := context.WithTimeout(retryCtx, 1)
+		tryCtx, cancel := context.WithTimeout(retryCtx, 1*time.Second)
 		_, err := wr.TabletManagerClient().ExecuteFetch(tryCtx, ti, command, 0, false, disableBinLogs)
 		cancel()
 		switch {

@@ -303,7 +303,7 @@ index by_msg (msg)
     shard_rdonly1.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+    utils.run_vtctl(['ReparentShard', '-force', '-leave-master-read-only', 'test_keyspace/0',
                      shard_master.tablet_alias], auto_log=True)
 
     # create the tables and add startup values
@@ -333,9 +333,9 @@ index by_msg (msg)
               shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+    utils.run_vtctl(['ReparentShard', '-force', '-leave-master-read-only', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+    utils.run_vtctl(['ReparentShard', '-force', '-leave-master-read-only', 'test_keyspace/80-',
                      shard_1_master.tablet_alias], auto_log=True)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
@@ -355,18 +355,7 @@ index by_msg (msg)
                        keyspace_shard],
                       auto_log=True)
 
-    # worker_proc = utils.run_vtworker(['--cell', 'test_nj',
-    #                     '--command_display_interval', '10ms',
-    #                     'SplitClone',
-    #                     '--exclude_tables' ,'unrelated',
-    #                     '--strategy=-populate_blp_checkpoint',
-    #                     '--source_reader_count', '10',
-    #                     '--min_table_size_for_split', '1',
-    #                     'test_keyspace/0'],
-    #                    auto_log=True,
-    #                    run_in_bg=True)
-
-    utils.run_vtworker(['--cell', 'test_nj',
+    worker_proc = utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'SplitClone',
                         '--exclude_tables' ,'unrelated',
@@ -374,12 +363,57 @@ index by_msg (msg)
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
-                       auto_log=True)
+                       auto_log=True,
+                       run_in_bg=True)
 
-    # time.sleep(10)
+    # utils.run_vtworker(['--cell', 'test_nj',
+    #                     '--command_display_interval', '10ms',
+    #                     'SplitClone',
+    #                     '--exclude_tables' ,'unrelated',
+    #                     '--strategy=-populate_blp_checkpoint',
+    #                     '--source_reader_count', '10',
+    #                     '--min_table_size_for_split', '1',
+    #                     'test_keyspace/0'],
+    #                    auto_log=True)
+
+    time.sleep(10)
+    # shard_0_master.kill_vttablet()
+    # shard_0_master.shutdown_mysql().wait()
+    # shard_1_master.kill_vttablet()
+    # shard_1_master.shutdown_mysql().wait()
+    # # Force the scrap action in zk.
+    # shard_0_master.scrap(force=True)
+    # print('Scrapped master for shard 0, tabliet alias: %s' % shard_0_master.tablet_alias)
+    utils.run_vtctl(['SetReadOnly', shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['SetReadOnly', shard_1_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['SetReadOnly', shard_0_replica.tablet_alias], auto_log=True)
+    utils.run_vtctl(['SetReadOnly', shard_1_replica.tablet_alias], auto_log=True)
+    utils.run_vtctl(['SetReadOnly', shard_0_rdonly1.tablet_alias], auto_log=True)
+    utils.run_vtctl(['SetReadOnly', shard_1_rdonly1.tablet_alias], auto_log=True)
+
+    utils.run_vtctl(['ReparentShard', '-leave-master-read-only', 'test_keyspace/-80',
+                     shard_0_replica.tablet_alias], auto_log=True)
+    print 'Promoted new master for shard 0: %s, replacing tabliet alias: %s' % (shard_0_replica.tablet_alias, shard_0_master.tablet_alias)
+    # # Force the scrap action in zk.
+    # shard_1_master.scrap(force=True)
+    # print('Scrapped master for shard 1, tabliet alias: %s' % shard_1_master.tablet_alias)
+    utils.run_vtctl(['ReparentShard', '-leave-master-read-only', 'test_keyspace/80-',
+                     shard_1_replica.tablet_alias], auto_log=True)
+    print 'Promoted new master for shard 1: %s, replacing tabliet alias: %s' % (shard_1_replica.tablet_alias, shard_1_master.tablet_alias)
+
+    utils.validate_topology()
+    self.assertEqual(
+      utils.run_vtctl_json(['GetEndPoints','test_nj', 'test_keyspace/-80', 'master'])['entries'][0]['named_port_map']['_vtocc'],
+      shard_0_replica.port,
+    )
+    self.assertEqual(
+      utils.run_vtctl_json(['GetEndPoints','test_nj', 'test_keyspace/80-', 'master'])['entries'][0]['named_port_map']['_vtocc'],
+      shard_1_replica.port,
+    )
+
     # print('Suspending tablet alias: %s' % shard_0_master.tablet_alias)
     # shard_0_master.suspend()
-    # utils.wait_procs([worker_proc])
+    utils.wait_procs([worker_proc])
 
     utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
                      auto_log=True)
