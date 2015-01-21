@@ -109,7 +109,7 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 	retryCtx, retryCancel := context.WithTimeout(ctx, retryDuration)
 	defer retryCancel()
 	for {
-		tryCtx, cancel := context.WithTimeout(retryCtx, 30*time.Second)
+		tryCtx, cancel := context.WithTimeout(retryCtx, 1)
 		_, err := wr.TabletManagerClient().ExecuteFetch(tryCtx, ti, command, 0, false, disableBinLogs)
 		cancel()
 		switch {
@@ -351,9 +351,9 @@ func makeValueString(fields []mproto.Field, rows [][]sqltypes.Value) string {
 // executeFetchLoop loops over the provided insertChannel
 // and sends the commands to the provided tablet.
 func executeFetchLoop(ctx context.Context, wr *wrangler.Wrangler, ti *topo.TabletInfo, insertChannel chan string, disableBinLogs bool) error {
-	fmt.Printf("About to sleep for 30s...\n")
-	time.Sleep(30 * time.Second)
-	fmt.Printf("finished sleeping!\n")
+	// fmt.Printf("About to sleep for 30s...\n")
+	// time.Sleep(30*time.Second)
+	// fmt.Printf("finished sleeping!\n")
 	for {
 		select {
 		case cmd, ok := <-insertChannel:

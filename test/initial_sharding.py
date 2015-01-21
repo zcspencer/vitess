@@ -355,7 +355,18 @@ index by_msg (msg)
                        keyspace_shard],
                       auto_log=True)
 
-    worker_proc = utils.run_vtworker(['--cell', 'test_nj',
+    # worker_proc = utils.run_vtworker(['--cell', 'test_nj',
+    #                     '--command_display_interval', '10ms',
+    #                     'SplitClone',
+    #                     '--exclude_tables' ,'unrelated',
+    #                     '--strategy=-populate_blp_checkpoint',
+    #                     '--source_reader_count', '10',
+    #                     '--min_table_size_for_split', '1',
+    #                     'test_keyspace/0'],
+    #                    auto_log=True,
+    #                    run_in_bg=True)
+
+    utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'SplitClone',
                         '--exclude_tables' ,'unrelated',
@@ -363,13 +374,12 @@ index by_msg (msg)
                         '--source_reader_count', '10',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
-                       auto_log=True,
-                       run_in_bg=True)
+                       auto_log=True)
 
-    time.sleep(10)
-    print('Suspending tablet alias: %s' % shard_0_master.tablet_alias)
-    shard_0_master.suspend()
-    utils.wait_procs([worker_proc])
+    # time.sleep(10)
+    # print('Suspending tablet alias: %s' % shard_0_master.tablet_alias)
+    # shard_0_master.suspend()
+    # utils.wait_procs([worker_proc])
 
     utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
                      auto_log=True)
