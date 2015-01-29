@@ -38,5 +38,5 @@ echo "Y" | sudo apt-get -y install rsyslog
 sudo service rsyslog restart
 
 # Python packages
-pip install coverage coveralls
+sudo pip install coverage coveralls
 set +e
