@@ -36,4 +36,7 @@ sudo dpkg -i sbt-0.13.6.deb
 sudo apt-get -y install protobuf-compiler maven
 echo "Y" | sudo apt-get -y install rsyslog
 sudo service rsyslog restart
+
+# Python packages
+pip install coverage coveralls
 set +e

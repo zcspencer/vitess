@@ -137,11 +137,24 @@ define run_integration_tests
 	done
 endef
 
+define integration_tests_coverage
+	for t in $1 ; do \
+		echo $$(date): Running coverage for test/$$t... ; \
+		output=$$(time coverage run --source=py -p test/$$t $$VT_TEST_FLAGS 2>&1) ; \
+		if [[ $$? != 0 ]]; then \
+			echo "$$output" >&2 ; \
+			exit 1 ; \
+		fi ; \
+		echo ; \
+	done
+endef
+
+
 small_integration_test:
 	$(call run_integration_tests, $(small_integration_test_files))
 
 medium_integration_test:
-	$(call run_integration_tests, $(medium_integration_test_files))
+	$(call integration_tests_coverage, $(medium_integration_test_files))
 
 large_integration_test:
 	$(call run_integration_tests, $(large_integration_test_files))
