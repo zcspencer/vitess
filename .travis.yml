@@ -19,5 +19,3 @@ install:
 script:
   - source dev.env
   - travis_retry make $MAKE_TARGET
-after_success:
-  - coveralls
