@@ -178,7 +178,7 @@ java_test:
 	cd java && mvn verify
 
 java_vtgate_client_test:
-	mvn -f java/vtgate-client/pom.xml clean verify
+	mvn -f java/vtgate-client/pom.xml clean verify jacoco:report coveralls:report
 
 v3_test:
 	cd test && ./vtgatev3_test.py
