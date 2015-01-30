@@ -148,6 +148,7 @@ define integration_tests_coverage
 		echo ; \
 	done
 	coverage combine
+	coveralls
 endef
 
 
