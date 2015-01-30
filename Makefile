@@ -153,16 +153,16 @@ endef
 
 
 small_integration_test:
-	$(call run_integration_tests, $(small_integration_test_files))
+	$(call integration_tests_coverage, $(small_integration_test_files))
 
 medium_integration_test:
 	$(call integration_tests_coverage, $(medium_integration_test_files))
 
 large_integration_test:
-	$(call run_integration_tests, $(large_integration_test_files))
+	$(call integration_tests_coverage, $(large_integration_test_files))
 
 ci_skip_integration_test:
-	$(call run_integration_tests, $(ci_skip_integration_test_files))
+	$(call integration_tests_coverage, $(ci_skip_integration_test_files))
 
 worker_test:
 	godep go test ./go/vt/worker/
