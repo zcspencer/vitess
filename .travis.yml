@@ -10,7 +10,7 @@ env:
     - MAKE_TARGET=medium_integration_test
     - MAKE_TARGET=large_integration_test
     - MAKE_TARGET=queryservice_test
-    - MAKE_TARGET=unit_test
+    - MAKE_TARGET=unit_test_goveralls
 before_install:
   - bash -v travis/dependencies.sh
 install:
