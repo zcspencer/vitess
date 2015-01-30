@@ -77,7 +77,6 @@
               <goal>prepare-agent</goal>
             </goals>
             <configuration>
-              <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
               <propertyName>surefireArgLine</propertyName>
             </configuration>
           </execution>
@@ -87,10 +86,6 @@
             <goals>
               <goal>report</goal>
             </goals>
-            <configuration>
-              <dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
-              <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
-            </configuration>
           </execution>
           <execution>
             <id>pre-integration-test</id>
@@ -99,7 +94,6 @@
               <goal>prepare-agent</goal>
             </goals>
             <configuration>
-              <destFile>${project.build.directory}/coverage-reports/jacoco-it.exec</destFile>
               <propertyName>failsafeArgLine</propertyName>
             </configuration>
           </execution>
@@ -109,10 +103,6 @@
             <goals>
               <goal>report</goal>
             </goals>
-            <configuration>
-              <dataFile>${project.build.directory}/coverage-reports/jacoco-it.exec</dataFile>
-              <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
-            </configuration>
           </execution>
         </executions>
       </plugin>
