@@ -7,6 +7,7 @@ package worker
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,6 +100,8 @@ func formatTableStatuses(tableStatuses []*tableStatus, startTime time.Time) ([]s
 	return result, eta
 }
 
+var errExtract = regexp.MustCompile(`\(errno (\d+)\)`)
+
 // executeFetchWithRetries will attempt to run ExecuteFetch for a single command, with a reasonably small timeout.
 // If will keep retrying the ExecuteFetch (for a finite but longer duration) if it fails due to a timeout or a
 // retriable application error.
@@ -126,8 +129,12 @@ func executeFetchWithRetries(ctx context.Context, wr *wrangler.Wrangler, ti *top
 			fmt.Printf("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v\n", ti, err)
 			wr.Logger().Infof("ExecuteFetch failed on %v; will retry because it was a retriable application failure: %v", ti, err)
 		default:
-			fmt.Printf("executeFetchWithRetries failed with err: %v\n", err)
-			return err
+			match := errExtract.FindStringSubmatch(err.Error())
+			if len(match) != 2 {
+				fmt.Printf("executeFetchWithRetries failed with err: %v\n", err)
+				return err
+			}
+			fmt.Printf("ExecuteFetch failed on %v; will retry because it was a retriable SQL failure: %v\n", ti, match)
 		}
 		t := time.NewTimer(30 * time.Second)
 		// don't leak memory if the timer isn't triggered
