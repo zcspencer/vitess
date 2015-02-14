@@ -240,21 +240,21 @@ index by_msg (msg)
 
   def _insert_lots(self, count, base=0):
     for i in xrange(count):
-      self._insert_value(shard_master, 'resharding1', 10000 + base + i,
+      self._insert_value(shard_master, 'resharding1', 100000 + base + i,
                          'msg-range1-%u' % i, 0xA000000000000000 + base + i)
-      self._insert_value(shard_master, 'resharding1', 20000 + base + i,
+      self._insert_value(shard_master, 'resharding1', 200000 + base + i,
                          'msg-range2-%u' % i, 0xE000000000000000 + base + i)
 
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
     found = 0
     for i in xrange(count):
-      if self._is_value_present_and_correct(shard_1_replica, 'resharding1',
-                                            10000 + base + i, 'msg-range1-%u' %
+      if self._is_value_present_and_correct(shard_1_rdonly1, 'resharding1',
+                                            100000 + base + i, 'msg-range1-%u' %
                                             i, 0xA000000000000000 + base + i):
         found += 1
-      if self._is_value_present_and_correct(shard_1_replica, 'resharding1',
-                                            20000 + base + i, 'msg-range2-%u' %
+      if self._is_value_present_and_correct(shard_1_rdonly1, 'resharding1',
+                                            200000 + base + i, 'msg-range2-%u' %
                                             i, 0xE000000000000000 + base + i):
         found += 1
     percent = found * 100 / count / 2
@@ -314,6 +314,9 @@ index by_msg (msg)
     self._add_sharding_key_to_schema()
     self._backfill_keyspace_id(shard_master)
     self._mark_sharding_key_not_null()
+    logging.debug("Inserting lots of data before sharding")
+    self._insert_lots(90000, base=1000)
+    logging.debug("Done inserting initial data")
 
     # create the split shards
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
@@ -332,6 +335,10 @@ index by_msg (msg)
               shard_1_master, shard_1_replica, shard_1_rdonly1]:
       t.wait_for_vttablet_state('NOT_SERVING')
 
+    # utils.run_vtctl(['ReparentShard', '-force', '-leave-master-read-only', 'test_keyspace/-80',
+    #                  shard_0_master.tablet_alias], auto_log=True)
+    # utils.run_vtctl(['ReparentShard', '-force', '-leave-master-read-only', 'test_keyspace/80-',
+    #                  shard_1_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
                      shard_0_master.tablet_alias], auto_log=True)
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
@@ -354,15 +361,27 @@ index by_msg (msg)
                        keyspace_shard],
                       auto_log=True)
 
-    utils.run_vtworker(['--cell', 'test_nj',
+    worker_proc = utils.run_vtworker(['--cell', 'test_nj',
                         '--command_display_interval', '10ms',
                         'SplitClone',
                         '--exclude_tables' ,'unrelated',
                         '--strategy=-populate_blp_checkpoint',
-                        '--source_reader_count', '10',
+                        # Slow down the worker as much as possible
+                        '--source_reader_count', '1',
+                        '--destination_writer_count', '1',
+                        '--destination_pack_count', '1',
                         '--min_table_size_for_split', '1',
                         'test_keyspace/0'],
-                       auto_log=True)
+                       auto_log=True,
+                       run_in_bg=True)
+
+    # time.sleep(10)
+    logging.debug("Waiting for 1 percent of data to be written to begin destination reparent")
+    self._check_lots_timeout(90000, 1, 30, base=1000)
+    logging.debug("Starting destination reparent")
+
+    utils.wait_procs([worker_proc])
+
     utils.run_vtctl(['ChangeSlaveType', shard_rdonly1.tablet_alias, 'rdonly'],
                      auto_log=True)
 
@@ -380,7 +399,7 @@ index by_msg (msg)
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
     # timeout, check we get all of it.
-    logging.debug("Inserting lots of data on source shard")
+    logging.debug("Inserting lots of data on source shard during filtered replication")
     self._insert_lots(1000)
     logging.debug("Checking 80 percent of data is sent quickly")
     self._check_lots_timeout(1000, 80, 5)
@@ -447,6 +466,8 @@ index by_msg (msg)
                              'Partitions(replica): -\n' +
                              'TabletTypes: master,rdonly,replica',
                              keyspace_id_type=keyspace_id_type)
+
+    # import ipdb; ipdb.set_trace()
 
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'replica'],
                     auto_log=True)
