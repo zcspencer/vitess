@@ -80,21 +80,6 @@ func NewShardConn(ctx context.Context, serv SrvTopoServer, cell, keyspace, shard
 	return sdc
 }
 
-// ShardConnError is the shard conn specific error.
-type ShardConnError struct {
-	Code            int
-	ShardIdentifier string
-	InTransaction   bool
-	Err             string
-}
-
-func (e *ShardConnError) Error() string {
-	if e.ShardIdentifier == "" {
-		return e.Err
-	}
-	return fmt.Sprintf("shard, host: %s, %v", e.ShardIdentifier, e.Err)
-}
-
 // Dial creates tablet connection and connects to the vttablet.
 // It is not necessary to call this function before serving queries,
 // but it would reduce connection overhead when serving the first query.
@@ -392,7 +377,7 @@ func (sdc *ShardConn) WrapError(in error, endPoint topo.EndPoint, inTransaction 
 		Code:            code,
 		ShardIdentifier: shardIdentifier,
 		InTransaction:   inTransaction,
-		Err:             in.Error(),
+		Err:             in,
 	}
-	return shardConnErr
+	return asVTGateError(shardConnErr)
 }
